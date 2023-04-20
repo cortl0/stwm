@@ -1,0 +1,43 @@
+#!/bin/bash
+
+config_dir_path=stwm_config
+config_file_path=$config_dir_path/config.txt
+
+declare -A config
+config[screen_width]=1920
+config[screen_height]=1040
+config[grid_size_width]=3
+config[grid_size_height]=2
+
+main() {
+    prepare
+}
+
+prepare() {
+    [ ! -d $config_dir_path ] && mkdir $config_dir_path
+    if [ ! -e $config_file_path ]
+    then
+        touch $config_file_path
+        echo ${config[screen_width]} >> $config_file_path
+        echo ${config[screen_height]} >> $config_file_path
+        echo ${config[grid_size_width]} >> $config_file_path
+        echo ${config[grid_size_height]} >> $config_file_path
+    fi
+    
+    readarray -t lines < $config_file_path
+    config[screen_width]=${lines[0]}
+    config[screen_height]=${lines[1]}
+    config[grid_size_width]=${lines[2]}
+    config[grid_size_height]=${lines[3]}
+    config[grid_cell_width]=$((${config[screen_width]} / ${config[grid_size_width]}))
+    config[grid_cell_height]=$((${config[screen_height]} / ${config[grid_size_height]}))
+
+    echo ${config[screen_width]}
+    echo ${config[screen_height]}
+    echo ${config[grid_size_width]}
+    echo ${config[grid_size_height]}
+    echo ${config[grid_cell_width]}
+    echo ${config[grid_cell_height]}
+}
+
+main "$@"
