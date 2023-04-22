@@ -2,28 +2,136 @@
 
 config_dir_path=stwm_config
 config_file_path=$config_dir_path/config.txt
+temp_file_path=$config_dir_path/temp.txt
 
 declare -A config
 config[screen_width]=1920
 config[screen_height]=1040
-config[grid_size_width]=3
-config[grid_size_height]=2
+config[grid_size_width]=8
+config[grid_size_height]=4
 
-main() {
+offset_x=2
+offset_y=52
+
+screen_width=0
+screen_height=0
+grid_widht=0
+grid_height=0
+
+window_num=$(xdotool getactivewindow)
+echo "window num is [$window_num]"
+window_geometry=$(xdotool getwindowgeometry $window_num)
+echo $window_geometry
+
+main()
+{
     prepare
+    start "$@"
 }
 
-prepare() {
+prepare()
+{
     [ ! -d $config_dir_path ] && mkdir $config_dir_path
-    if [ ! -e $config_file_path ]
-    then
-        touch $config_file_path
-        echo ${config[screen_width]} >> $config_file_path
-        echo ${config[screen_height]} >> $config_file_path
-        echo ${config[grid_size_width]} >> $config_file_path
-        echo ${config[grid_size_height]} >> $config_file_path
-    fi
+    [ ! -e $config_file_path ] && save_config
+    read_config
+    print_config
+}
+
+start()
+{
+    case $1 in
+        move)
+		    move_window "$@"
+            ;;
+        resize)
+            resize_window "$@"
+            ;;
+        grid)
+            grid "$@"
+            ;;
+        screen)
+            screen "$@"
+            ;;
+        *)
+            help
+            exit 1
+            ;;
+    esac
+}
+
+grid()
+{
+    config[grid_size_width]=$2
+    config[grid_size_height]=$3
+    save_config
+}
+
+help()
+{
+	echo "help:"
+	echo "stwm <mode> [args...]"
+	echo "    modes:"
+	echo "        move <direction of movement using the upper left corner>"
+	echo "            directions of movement:"
+	echo "                left"
+	echo "                right"
+	echo "                up"
+	echo "                down"
+	echo "        resize <direction of resizing using the lower right corner>"
+	echo "            directions of resize:"
+	echo "                left"
+	echo "                right"
+	echo "                up"
+	echo "                down"
+	echo "        grid <width> <height>"
+	echo "        screen <width> <height>"
+}
+
+move_window()
+{
+	gcsx=$(($screen_width / $grid_widht))
+	gcsy=$(($screen_height / $grid_height))
+    str=$(grep -Eo '[[:digit:]]+|[^[:digit:]]+' <<<"$window_geometry")
+    echo "${str[@]}" > $temp_file_path
+    readarray -t lines < $temp_file_path
+    x=$((10#${lines[3]}))
+    y=$((10#${lines[5]}))
+	x=$((x-offset_x))
+	y=$((y-offset_y))
     
+    case $2 in
+        left)
+		    x=$((((x/gcsx)-1)*gcsx))
+            ;;
+        right)
+		    x=$((((x/gcsx)+1)*gcsx))
+            ;;
+        up)
+		    y=$((((y/gcsy)-1)*gcsy))
+            ;;
+        down)
+		    y=$((((y/gcsy)+1)*gcsy))
+            ;;
+        *)
+            help
+            exit 1
+            ;;
+    esac
+    xdotool windowmove $window_num $x $y
+}
+
+print_config()
+{
+    echo ${config[screen_width]}
+    echo ${config[screen_height]}
+    echo ${config[grid_size_width]}
+    echo ${config[grid_size_height]}
+    echo ${config[grid_cell_width]}
+    echo ${config[grid_cell_height]}
+}
+
+read_config()
+{
     readarray -t lines < $config_file_path
     config[screen_width]=${lines[0]}
     config[screen_height]=${lines[1]}
@@ -32,12 +140,76 @@ prepare() {
     config[grid_cell_width]=$((${config[screen_width]} / ${config[grid_size_width]}))
     config[grid_cell_height]=$((${config[screen_height]} / ${config[grid_size_height]}))
 
-    echo ${config[screen_width]}
-    echo ${config[screen_height]}
-    echo ${config[grid_size_width]}
-    echo ${config[grid_size_height]}
-    echo ${config[grid_cell_width]}
-    echo ${config[grid_cell_height]}
+    screen_width=${lines[0]}
+    screen_height=${lines[1]}
+    grid_widht=${lines[2]}
+    grid_height=${lines[3]}
+}
+
+resize_window()
+{
+	gcsx=$(($screen_width / $grid_widht))
+	gcsy=$(($screen_height / $grid_height))
+    str=$(grep -Eo '[[:digit:]]+|[^[:digit:]]+' <<<"$window_geometry")
+    echo "${str[@]}" > $temp_file_path
+    readarray -t lines < $temp_file_path
+    x=$((10#${lines[3]}))
+    y=$((10#${lines[5]}))
+    xs=$((10#${lines[10]}))
+    ys=$((10#${lines[12]}))
+
+	x=$((x-offset_x))
+	y=$((y-offset_y))
+	xs=$((xs+offset_x))
+	ys=$((ys+offset_y))
+
+	x=$(((x/gcsx)*gcsx))
+	y=$(((y/gcsy)*gcsy))
+	xs=$(((xs/gcsx)*gcsx))
+	ys=$(((ys/gcsy)*gcsy))
+    xss=$((x+xs))
+    yss=$((y+ys))
+
+    case $2 in
+        left)
+		    xss=$((((xss/gcsx)-1)*gcsx))
+            ;;
+        right)
+		    xss=$((((xss/gcsx)+1)*gcsx))
+            ;;
+        up)
+		    yss=$((((yss/gcsy)-1)*gcsy))
+            ;;
+        down)
+		    yss=$((((yss/gcsy)+1)*gcsy))
+            ;;
+        *)
+            help
+            exit 1
+            ;;
+    esac
+
+    x=$((xss-x))
+    y=$((yss-y))
+
+    xdotool windowsize $window_num $x $y
+}
+
+save_config()
+{
+    [ -e $config_file_path ] && rm $config_file_path
+    touch $config_file_path
+    echo ${config[screen_width]} >> $config_file_path
+    echo ${config[screen_height]} >> $config_file_path
+    echo ${config[grid_size_width]} >> $config_file_path
+    echo ${config[grid_size_height]} >> $config_file_path
+}
+
+screen()
+{
+    config[screen_width]=$2
+    config[screen_height]=$3
+    save_config
 }
 
 main "$@"
