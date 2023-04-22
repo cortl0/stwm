@@ -5,7 +5,9 @@ for Linux using hotkeys
 # requirements
 xdotool  
 installation:  
+```
 <your package manager> install xdotool
+```
 
 # recomended hotkeys with commands
 ```
