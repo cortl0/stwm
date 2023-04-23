@@ -9,13 +9,14 @@ header_offset_y=0
 screen_width=0
 screen_height=0
 grid_width=8
-grid_height=4
-taskbar_height=40
+grid_height=5
+taskbar_height=41
 
 window_x=0
 window_y=0
-window_size_x=0
-window_size_y=0
+window_width=0
+window_height=0
+window_height_correction=30
 
 window_num=$(xdotool getactivewindow)
 window_geometry=$(xdotool getwindowgeometry $window_num)
@@ -109,24 +110,24 @@ help()
 
 move_window()
 {
-    grid_cell_size_x=$(($screen_width / $grid_widht))
-    grid_cell_size_y=$(($screen_height / $grid_height))
+    grid_cell_width=$(($screen_width / $grid_widht))
+    grid_cell_height=$(($screen_height / $grid_height))
     parse_window_geometry
     window_x=$((window_x-header_offset_x))
     window_y=$((window_y-header_offset_y))
 
     case $2 in
         left)
-            window_x=$((((window_x/grid_cell_size_x)-1)*grid_cell_size_x))
+            window_x=$((((window_x/grid_cell_width)-1)*grid_cell_width))
             ;;
         right)
-            window_x=$((((window_x/grid_cell_size_x)+1)*grid_cell_size_x))
+            window_x=$((((window_x/grid_cell_width)+1)*grid_cell_width))
             ;;
         up)
-            window_y=$((((window_y/grid_cell_size_y)-1)*grid_cell_size_y))
+            window_y=$((((window_y/grid_cell_height)-1)*grid_cell_height))
             ;;
         down)
-            window_y=$((((window_y/grid_cell_size_y)+1)*grid_cell_size_y))
+            window_y=$((((window_y/grid_cell_height)+1)*grid_cell_height))
             ;;
         *)
             help
@@ -143,8 +144,8 @@ parse_window_geometry()
     readarray -t lines < $temp_file_path
     window_x=$((10#${lines[3]}))
     window_y=$((10#${lines[5]}))
-    window_size_x=$((10#${lines[10]}))
-    window_size_y=$((10#${lines[12]}))
+    window_width=$((10#${lines[10]}))
+    window_height=$((10#${lines[12]}))
 }
 
 print_config()
@@ -178,34 +179,34 @@ read_config()
 
 resize_window()
 {
-    grid_cell_size_x=$(($screen_width / $grid_widht))
-    grid_cell_size_y=$(($screen_height / $grid_height))
+    grid_cell_width=$(($screen_width / $grid_widht))
+    grid_cell_height=$(($screen_height / $grid_height))
     parse_window_geometry
 
     window_x=$((window_x-header_offset_x))
     window_y=$((window_y-header_offset_y))
-    window_size_x=$((window_size_x+header_offset_x))
-    window_size_y=$((window_size_y+header_offset_y))
+    window_width=$((window_width+header_offset_x))
+    window_height=$((window_height+header_offset_y))
 
-    window_x=$(((window_x/grid_cell_size_x)*grid_cell_size_x))
-    window_y=$(((window_y/grid_cell_size_y)*grid_cell_size_y))
-    window_size_x=$(((window_size_x/grid_cell_size_x)*grid_cell_size_x))
-    window_size_y=$(((window_size_y/grid_cell_size_y)*grid_cell_size_y))
-    full_window_size_x=$((window_x+window_size_x))
-    full_window_size_y=$((window_y+window_size_y))
+    window_x=$(((window_x/grid_cell_width)*grid_cell_width))
+    window_y=$(((window_y/grid_cell_height)*grid_cell_height))
+    window_width=$(((window_width/grid_cell_width)*grid_cell_width))
+    window_height=$(((window_height/grid_cell_height)*grid_cell_height))
+    full_window_width=$((window_x+window_width))
+    full_window_height=$((window_y+window_height))
 
     case $2 in
         left)
-            full_window_size_x=$((((full_window_size_x/grid_cell_size_x)-1)*grid_cell_size_x))
+            full_window_width=$((((full_window_width/grid_cell_width)-1)*grid_cell_width))
             ;;
         right)
-            full_window_size_x=$((((full_window_size_x/grid_cell_size_x)+1)*grid_cell_size_x))
+            full_window_width=$((((full_window_width/grid_cell_width)+1)*grid_cell_width))
             ;;
         up)
-            full_window_size_y=$((((full_window_size_y/grid_cell_size_y)-1)*grid_cell_size_y))
+            full_window_height=$((((full_window_height/grid_cell_height)-1)*grid_cell_height))
             ;;
         down)
-            full_window_size_y=$((((full_window_size_y/grid_cell_size_y)+1)*grid_cell_size_y))
+            full_window_height=$((((full_window_height/grid_cell_height)+1)*grid_cell_height))
             ;;
         *)
             help
@@ -213,8 +214,9 @@ resize_window()
             ;;
     esac
 
-    window_x=$((full_window_size_x-window_x))
-    window_y=$((full_window_size_y-window_y))
+    window_x=$((full_window_width-window_x))
+    window_y=$((full_window_height-window_y))
+    window_y=$((window_y-window_height_correction))
 
     xdotool windowsize $window_num $window_x $window_y
 }
