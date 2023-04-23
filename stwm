@@ -1,25 +1,23 @@
 #!/bin/bash
 
-config_dir_path=stwm_config
-config_file_path=$config_dir_path/config.txt
-temp_file_path=$config_dir_path/temp.txt
+working_dir_path=~/.stwm
+config_file_path=$working_dir_path/config.txt
+temp_file_path=$working_dir_path/temp.txt
 
-declare -A config
-config[screen_width]=1920
-config[screen_height]=1040
-config[grid_size_width]=8
-config[grid_size_height]=4
-
-offset_x=2
-offset_y=52
-
+header_offset_x=0
+header_offset_y=0
 screen_width=0
 screen_height=0
-grid_widht=0
-grid_height=0
+grid_width=8
+grid_height=4
+taskbar_height=40
+
+window_x=0
+window_y=0
+window_size_x=0
+window_size_y=0
 
 window_num=$(xdotool getactivewindow)
-echo "window num is [$window_num]"
 window_geometry=$(xdotool getwindowgeometry $window_num)
 echo $window_geometry
 
@@ -31,8 +29,11 @@ main()
 
 prepare()
 {
-    [ ! -d $config_dir_path ] && mkdir $config_dir_path
-    [ ! -e $config_file_path ] && save_config
+    [ ! -d $working_dir_path ] && mkdir $working_dir_path
+    if [[ ! -e $config_file_path ]]; then
+        calculate_config
+        save_config
+    fi
     read_config
     print_config
 }
@@ -59,10 +60,29 @@ start()
     esac
 }
 
+calculate_config()
+{
+    screen_geometry=$(xdotool getdisplaygeometry)
+    echo $screen_geometry
+    geometry=$(grep -Eo '[[:digit:]]+|[^[:digit:]]+' <<<"$screen_geometry")
+    echo "${geometry[@]}"
+    echo "${geometry[@]}" > $temp_file_path
+    readarray -t lines < $temp_file_path
+    screen_width=$((10#${lines[0]}))
+    screen_height=$((10#${lines[2]}))
+    screen_height=$((screen_height-taskbar_height))
+
+    xdotool windowmove $window_num 0 0
+    window_geometry=$(xdotool getwindowgeometry $window_num)
+    parse_window_geometry
+    header_offset_x=$window_x
+    header_offset_y=$window_y
+}
+
 grid()
 {
-    config[grid_size_width]=$2
-    config[grid_size_height]=$3
+    grid_width=$2
+    grid_height=$3
     save_config
 }
 
@@ -89,99 +109,103 @@ help()
 
 move_window()
 {
-	gcsx=$(($screen_width / $grid_widht))
-	gcsy=$(($screen_height / $grid_height))
-    str=$(grep -Eo '[[:digit:]]+|[^[:digit:]]+' <<<"$window_geometry")
-    echo "${str[@]}" > $temp_file_path
-    readarray -t lines < $temp_file_path
-    x=$((10#${lines[3]}))
-    y=$((10#${lines[5]}))
-	x=$((x-offset_x))
-	y=$((y-offset_y))
-    
+    grid_cell_size_x=$(($screen_width / $grid_widht))
+    grid_cell_size_y=$(($screen_height / $grid_height))
+    parse_window_geometry
+    window_x=$((window_x-header_offset_x))
+    window_y=$((window_y-header_offset_y))
+
     case $2 in
         left)
-		    x=$((((x/gcsx)-1)*gcsx))
+            window_x=$((((window_x/grid_cell_size_x)-1)*grid_cell_size_x))
             ;;
         right)
-		    x=$((((x/gcsx)+1)*gcsx))
+            window_x=$((((window_x/grid_cell_size_x)+1)*grid_cell_size_x))
             ;;
         up)
-		    y=$((((y/gcsy)-1)*gcsy))
+            window_y=$((((window_y/grid_cell_size_y)-1)*grid_cell_size_y))
             ;;
         down)
-		    y=$((((y/gcsy)+1)*gcsy))
+            window_y=$((((window_y/grid_cell_size_y)+1)*grid_cell_size_y))
             ;;
         *)
             help
             exit 1
             ;;
     esac
-    xdotool windowmove $window_num $x $y
+    xdotool windowmove $window_num $window_x $window_y
+}
+
+parse_window_geometry()
+{
+    geometry=$(grep -Eo '[[:digit:]]+|[^[:digit:]]+' <<<"$window_geometry")
+    echo "${geometry[@]}" > $temp_file_path
+    readarray -t lines < $temp_file_path
+    window_x=$((10#${lines[3]}))
+    window_y=$((10#${lines[5]}))
+    window_size_x=$((10#${lines[10]}))
+    window_size_y=$((10#${lines[12]}))
 }
 
 print_config()
 {
-    echo ${config[screen_width]}
-    echo ${config[screen_height]}
-    echo ${config[grid_size_width]}
-    echo ${config[grid_size_height]}
-    echo ${config[grid_cell_width]}
-    echo ${config[grid_cell_height]}
+    echo $screen_width
+    echo $screen_height
+    echo $grid_width
+    echo $grid_height
+    echo $header_offset_x
+    echo $header_offset_y
 }
 
 read_config()
 {
     readarray -t lines < $config_file_path
-    config[screen_width]=${lines[0]}
-    config[screen_height]=${lines[1]}
-    config[grid_size_width]=${lines[2]}
-    config[grid_size_height]=${lines[3]}
-    config[grid_cell_width]=$((${config[screen_width]} / ${config[grid_size_width]}))
-    config[grid_cell_height]=$((${config[screen_height]} / ${config[grid_size_height]}))
+    screen_width=${lines[0]}
+    screen_height=${lines[1]}
+    grid_width=${lines[2]}
+    grid_height=${lines[3]}
 
     screen_width=${lines[0]}
     screen_height=${lines[1]}
     grid_widht=${lines[2]}
     grid_height=${lines[3]}
+
+    header_offset_x=${lines[4]}
+    header_offset_y=${lines[5]}
+
+    #taskbar_height=${lines[6]}
 }
 
 resize_window()
 {
-	gcsx=$(($screen_width / $grid_widht))
-	gcsy=$(($screen_height / $grid_height))
-    str=$(grep -Eo '[[:digit:]]+|[^[:digit:]]+' <<<"$window_geometry")
-    echo "${str[@]}" > $temp_file_path
-    readarray -t lines < $temp_file_path
-    x=$((10#${lines[3]}))
-    y=$((10#${lines[5]}))
-    xs=$((10#${lines[10]}))
-    ys=$((10#${lines[12]}))
+    grid_cell_size_x=$(($screen_width / $grid_widht))
+    grid_cell_size_y=$(($screen_height / $grid_height))
+    parse_window_geometry
 
-	x=$((x-offset_x))
-	y=$((y-offset_y))
-	xs=$((xs+offset_x))
-	ys=$((ys+offset_y))
+    window_x=$((window_x-header_offset_x))
+    window_y=$((window_y-header_offset_y))
+    window_size_x=$((window_size_x+header_offset_x))
+    window_size_y=$((window_size_y+header_offset_y))
 
-	x=$(((x/gcsx)*gcsx))
-	y=$(((y/gcsy)*gcsy))
-	xs=$(((xs/gcsx)*gcsx))
-	ys=$(((ys/gcsy)*gcsy))
-    xss=$((x+xs))
-    yss=$((y+ys))
+    window_x=$(((window_x/grid_cell_size_x)*grid_cell_size_x))
+    window_y=$(((window_y/grid_cell_size_y)*grid_cell_size_y))
+    window_size_x=$(((window_size_x/grid_cell_size_x)*grid_cell_size_x))
+    window_size_y=$(((window_size_y/grid_cell_size_y)*grid_cell_size_y))
+    full_window_size_x=$((window_x+window_size_x))
+    full_window_size_y=$((window_y+window_size_y))
 
     case $2 in
         left)
-		    xss=$((((xss/gcsx)-1)*gcsx))
+            full_window_size_x=$((((full_window_size_x/grid_cell_size_x)-1)*grid_cell_size_x))
             ;;
         right)
-		    xss=$((((xss/gcsx)+1)*gcsx))
+            full_window_size_x=$((((full_window_size_x/grid_cell_size_x)+1)*grid_cell_size_x))
             ;;
         up)
-		    yss=$((((yss/gcsy)-1)*gcsy))
+            full_window_size_y=$((((full_window_size_y/grid_cell_size_y)-1)*grid_cell_size_y))
             ;;
         down)
-		    yss=$((((yss/gcsy)+1)*gcsy))
+            full_window_size_y=$((((full_window_size_y/grid_cell_size_y)+1)*grid_cell_size_y))
             ;;
         *)
             help
@@ -189,26 +213,29 @@ resize_window()
             ;;
     esac
 
-    x=$((xss-x))
-    y=$((yss-y))
+    window_x=$((full_window_size_x-window_x))
+    window_y=$((full_window_size_y-window_y))
 
-    xdotool windowsize $window_num $x $y
+    xdotool windowsize $window_num $window_x $window_y
 }
 
 save_config()
 {
     [ -e $config_file_path ] && rm $config_file_path
     touch $config_file_path
-    echo ${config[screen_width]} >> $config_file_path
-    echo ${config[screen_height]} >> $config_file_path
-    echo ${config[grid_size_width]} >> $config_file_path
-    echo ${config[grid_size_height]} >> $config_file_path
+    echo $screen_width >> $config_file_path
+    echo $screen_height >> $config_file_path
+    echo $grid_width >> $config_file_path
+    echo $grid_height >> $config_file_path
+    echo $header_offset_x >> $config_file_path
+    echo $header_offset_y >> $config_file_path
+    #echo $taskbar_height >> $config_file_path
 }
 
 screen()
 {
-    config[screen_width]=$2
-    config[screen_height]=$3
+    screen_width=$2
+    screen_height=$3
     save_config
 }
 
