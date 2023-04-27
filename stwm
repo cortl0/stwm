@@ -3,6 +3,7 @@
 working_dir_path=~/.stwm
 config_file_path=$working_dir_path/config.txt
 temp_file_path=$working_dir_path/temp.txt
+debug_file_path=$working_dir_path/debug.txt
 
 header_offset_x=0
 header_offset_y=0
@@ -10,13 +11,17 @@ screen_width=0
 screen_height=0
 grid_width=8
 grid_height=5
-taskbar_height=41
+taskbar_height=40
+
+grid_cell_width=0
+grid_cell_height=0
 
 window_x=0
 window_y=0
 window_width=0
 window_height=0
-window_height_correction=30
+window_height_correction=31
+clearance=2
 
 window_num=$(xdotool getactivewindow)
 window_geometry=$(xdotool getwindowgeometry $window_num)
@@ -37,6 +42,12 @@ prepare()
     fi
     read_config
     print_config
+
+    grid_cell_width=$((screen_width / grid_width))
+    grid_cell_height=$((screen_height / grid_height))
+
+    parse_window_geometry
+    window_geometry_correction
 }
 
 start()
@@ -71,7 +82,7 @@ calculate_config()
     readarray -t lines < $temp_file_path
     screen_width=$((10#${lines[0]}))
     screen_height=$((10#${lines[2]}))
-    screen_height=$((screen_height-taskbar_height))
+    screen_height=$((screen_height - taskbar_height))
 
     xdotool windowmove $window_num 0 0
     window_geometry=$(xdotool getwindowgeometry $window_num)
@@ -82,58 +93,58 @@ calculate_config()
 
 grid()
 {
-    grid_width=$2
-    grid_height=$3
-    save_config
+    if [[ "$#" -eq 3 ]]; then
+        grid_width=$2
+        grid_height=$3
+        save_config
+    fi
 }
 
 help()
 {
-	echo "help:"
-	echo "stwm <mode> [args...]"
-	echo "    modes:"
-	echo "        move <direction of movement using the upper left corner>"
-	echo "            directions of movement:"
-	echo "                left"
-	echo "                right"
-	echo "                up"
-	echo "                down"
-	echo "        resize <direction of resizing using the lower right corner>"
-	echo "            directions of resize:"
-	echo "                left"
-	echo "                right"
-	echo "                up"
-	echo "                down"
-	echo "        grid <width> <height>"
-	echo "        screen <width> <height>"
+    echo "help:"
+    echo "stwm <mode> [args...]"
+    echo "    modes:"
+    echo "        move <direction of movement using the upper left corner>"
+    echo "            directions of movement:"
+    echo "                left"
+    echo "                right"
+    echo "                up"
+    echo "                down"
+    echo "        resize <direction of resizing using the lower right corner>"
+    echo "            directions of resize:"
+    echo "                left"
+    echo "                right"
+    echo "                up"
+    echo "                down"
+    echo "        grid <width> <height>"
+    echo "        screen <width> <height>"
 }
 
 move_window()
 {
-    grid_cell_width=$(($screen_width / $grid_widht))
-    grid_cell_height=$(($screen_height / $grid_height))
-    parse_window_geometry
-    window_x=$((window_x-header_offset_x))
-    window_y=$((window_y-header_offset_y))
-
     case $2 in
         left)
-            window_x=$((((window_x/grid_cell_width)-1)*grid_cell_width))
+            window_x=$((window_x - grid_cell_width))
             ;;
         right)
-            window_x=$((((window_x/grid_cell_width)+1)*grid_cell_width))
+            window_x=$((window_x + grid_cell_width))
             ;;
         up)
-            window_y=$((((window_y/grid_cell_height)-1)*grid_cell_height))
+            window_y=$((window_y - grid_cell_height))
             ;;
         down)
-            window_y=$((((window_y/grid_cell_height)+1)*grid_cell_height))
+            window_y=$((window_y + grid_cell_height))
             ;;
         *)
             help
             exit 1
             ;;
     esac
+
+    window_x=$((window_x + clearance))
+    window_y=$((window_y + clearance))
+
     xdotool windowmove $window_num $window_x $window_y
 }
 
@@ -146,6 +157,24 @@ parse_window_geometry()
     window_y=$((10#${lines[5]}))
     window_width=$((10#${lines[10]}))
     window_height=$((10#${lines[12]}))
+
+    echo '---' >> $debug_file_path
+    print_debug_info
+}
+
+window_geometry_correction()
+{
+    window_x=$((window_x - header_offset_x))
+    window_y=$((window_y - header_offset_y))
+    window_height=$((window_height + window_height_correction))
+
+    window_x=$(((window_x+grid_cell_width/2)/grid_cell_width*grid_cell_width))
+    window_y=$(((window_y+grid_cell_height/2)/grid_cell_height*grid_cell_height))
+    window_width=$(((window_width+grid_cell_width/2)/grid_cell_width*grid_cell_width))
+    window_height=$(((window_height+grid_cell_height/2)/grid_cell_height*grid_cell_height))
+
+    echo '+++' >> $debug_file_path
+    print_debug_info
 }
 
 print_config()
@@ -158,6 +187,14 @@ print_config()
     echo $header_offset_y
 }
 
+print_debug_info()
+{
+    echo $window_x >> $debug_file_path
+    echo $window_y >> $debug_file_path
+    echo $window_width >> $debug_file_path
+    echo $window_height >> $debug_file_path
+}
+
 read_config()
 {
     readarray -t lines < $config_file_path
@@ -165,48 +202,25 @@ read_config()
     screen_height=${lines[1]}
     grid_width=${lines[2]}
     grid_height=${lines[3]}
-
-    screen_width=${lines[0]}
-    screen_height=${lines[1]}
-    grid_widht=${lines[2]}
-    grid_height=${lines[3]}
-
     header_offset_x=${lines[4]}
     header_offset_y=${lines[5]}
-
     #taskbar_height=${lines[6]}
 }
 
 resize_window()
 {
-    grid_cell_width=$(($screen_width / $grid_widht))
-    grid_cell_height=$(($screen_height / $grid_height))
-    parse_window_geometry
-
-    window_x=$((window_x-header_offset_x))
-    window_y=$((window_y-header_offset_y))
-    window_width=$((window_width+header_offset_x))
-    window_height=$((window_height+header_offset_y))
-
-    window_x=$(((window_x/grid_cell_width)*grid_cell_width))
-    window_y=$(((window_y/grid_cell_height)*grid_cell_height))
-    window_width=$(((window_width/grid_cell_width)*grid_cell_width))
-    window_height=$(((window_height/grid_cell_height)*grid_cell_height))
-    full_window_width=$((window_x+window_width))
-    full_window_height=$((window_y+window_height))
-
     case $2 in
         left)
-            full_window_width=$((((full_window_width/grid_cell_width)-1)*grid_cell_width))
+            window_width=$((window_width - grid_cell_width))
             ;;
         right)
-            full_window_width=$((((full_window_width/grid_cell_width)+1)*grid_cell_width))
+            window_width=$((window_width + grid_cell_width))
             ;;
         up)
-            full_window_height=$((((full_window_height/grid_cell_height)-1)*grid_cell_height))
+            window_height=$((window_height - grid_cell_height))
             ;;
         down)
-            full_window_height=$((((full_window_height/grid_cell_height)+1)*grid_cell_height))
+            window_height=$((window_height + grid_cell_height))
             ;;
         *)
             help
@@ -214,11 +228,12 @@ resize_window()
             ;;
     esac
 
-    window_x=$((full_window_width-window_x))
-    window_y=$((full_window_height-window_y))
-    window_y=$((window_y-window_height_correction))
+    window_height=$((window_height - window_height_correction))
 
-    xdotool windowsize $window_num $window_x $window_y
+    window_width=$((window_width - 2 * clearance))
+    window_height=$((window_height - 2 * clearance))
+
+    xdotool windowsize $window_num $window_width $window_height
 }
 
 save_config()
@@ -236,9 +251,11 @@ save_config()
 
 screen()
 {
-    screen_width=$2
-    screen_height=$3
-    save_config
+    if [[ "$#" -eq 3 ]]; then
+        screen_width=$2
+        screen_height=$3
+        save_config
+    fi
 }
 
 main "$@"
